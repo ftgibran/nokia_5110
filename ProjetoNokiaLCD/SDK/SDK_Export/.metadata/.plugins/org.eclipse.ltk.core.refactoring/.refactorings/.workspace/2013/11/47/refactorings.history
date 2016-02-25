@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename resource &apos;Maome2_hw_platform&apos; to &apos;ProjetoNokiaLCD_hw_platform&apos;" description="Rename resource &apos;Maome2_hw_platform&apos;" flags="7" id="org.eclipse.ltk.core.refactoring.rename.resource" input="/Maome2_hw_platform" name="ProjetoNokiaLCD_hw_platform" stamp="1385144157982" updateReferences="true"/>
+</session>

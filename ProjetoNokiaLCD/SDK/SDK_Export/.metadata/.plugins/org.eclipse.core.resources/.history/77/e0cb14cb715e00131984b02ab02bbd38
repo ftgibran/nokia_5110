@@ -1,0 +1,1080 @@
+/*
+ * Nokia5110.c	v1.0
+ ******************************************************
+ * Nokia Display LCD 5110
+ ******************************************************
+ * Unversidade Presbiteriana Mackenzie
+ ******************************************************
+ *      Authors: Eduardo Lichtenfels Riccio 31164560
+ *      		 Felipe Gibran Toledo		31113389
+ *      		 Gustavo Teixeira Mesquita  31103693
+ ******************************************************
+ * Note: This source works in Spartan 3E (Arduino sucks!)
+ ******************************************************
+ * LICENSE: Open Source
+ ******************************************************
+ */
+#include "Nokia5110.h"
+#include "Image.h"
+
+#include "string.h"
+
+#define LOOP		1
+
+#define BTN_CENTER	1
+#define BTN_LEFT	2
+#define BTN_RIGHT	4
+#define BTN_UP		8
+
+int rot_q1, rot_q2, temp;
+
+u8 RecvBuffer[16], rx[5];
+int buff;
+char *menu[] = {"Texto", "RS232", "Configs", "Sobre"};
+
+void ProjectStartup(void);
+void ProjectCredits(void);
+
+void openMainMenu(void); //Open the MainMenu
+void openText(void);  //Open Text miniapp
+void openRS232(void);  //Open RS232 miniapp
+void openConfig(void);  //Open Config miniapp
+void openAbout(void);  //Open About miniapp
+
+void showMainMenu(int n); //show/refresh main menu screen
+void showCredits(int n);  //show/refresh credits screen
+void showConfig(int n);  //show/refresh config screen
+
+void set_title(char *s);  //the title will be shown on the top screen
+
+void activeMainMenuBtn(void);  //NORTH_BTN will be activated. This btn goes to main menu.
+
+int get_rot(void);
+int get_push(void);
+
+void show_eduardo(void);
+void show_gibran(void);
+void show_gustavo(void);
+
+/*
+Appication startup
+ *****************************************************
+ */
+int main(void)
+{
+	LoadSpartan3E(); //Load Spartan 3E components
+
+	//Show in RS232
+	xil_printf("\n\r NOKIA 5110 - Projeto Final\n\r");
+	xil_printf("\n\r ========================================\n\r");
+	xil_printf("\n\r Eduardo Riccio\n\r");
+	xil_printf("\n\r Felipe Gibran\n\r");
+	xil_printf("\n\r Gustavo Mesquita\n\r");
+	xil_printf("\n\r ========================================\n\r");
+
+	NK5110Init(); //Initializing defaults config of Nokia LCD 5110
+
+	NK5110Startup(); //Show default Nokia presentation
+	ProjectStartup(); //Show Project presentation
+	ProjectCredits(); //Show Project credits
+
+	openMainMenu(); //Open Main menu and start application
+
+	return XST_SUCCESS;
+}
+
+/*
+ *****************************************************
+ */
+
+void ProjectStartup(void)
+{
+	LCDClear(0); 
+
+	printBmp(mack8bits); //Print Mackenzie logo
+	int i;
+	for (i = 0; i < 6; i++) //Mackenzie logo will blink a few times
+	{
+		display_inverse();	delay(250);
+		display_normal();	delay(250);
+	}
+
+	LCDClear(3000); //wait 3 secs
+
+	//show about project
+	printStr("Algoritmos");			newLine();
+	printStr("Projeto Final");		newBoldLine();
+	newBoldLine();
+	printStrBold("Professor: ");	newBoldLine();
+	printStrBold("   C. Akamine");	newBoldLine(); //Cristiano Akamine
+
+	delay(6000); //wait at least 6 secs
+}
+
+void ProjectCredits(void)
+{
+	LCDClear(0);
+
+	printStr("Eduardo L. R.");		newLine(); //Eduardo L. Riccio
+	printStr("   3116456-0");		newLine(); //3116456-0
+	printStr("F.Gibran E. T.");		newLine(); //Felipe Gibran E. Toledo
+	printStr("   3111338-9");		newLine(); //3111338-9
+	printStr("Gustavo T. M.");		newLine(); //Gustavo T. Mesquita
+	printStr("   3110369-3");				   //3110369-3
+
+	LCDClear(5000);
+
+	show_eduardo();
+
+	LCDClear(5000);
+
+	show_gibran();
+
+	LCDClear(5000);
+
+	show_gustavo();
+
+	delay(5000);
+}
+
+void openMainMenu(void)
+{
+	int nOption;
+
+	LCDClear(0);
+
+	showMainMenu(0); //Print MainMenu on screen LCD
+
+	while (LOOP)
+	{
+		activeMainMenuBtn(); 
+
+		if(get_push() == BTN_CENTER) 
+		{
+			if (nOption==0) openText(); 	
+			if (nOption==1) openRS232(); 	
+			if (nOption==2) openConfig();	
+			if (nOption==3) openAbout();	
+		}
+
+		if(get_push() == BTN_LEFT)  //Same effect of rotatory
+		{
+			nOption--;
+			if (nOption<0) nOption = sizeof(menu)/sizeof(*menu)-1;
+			showMainMenu(nOption);
+		}
+
+		if(get_push() == BTN_RIGHT)  //Same effect of rotatory
+		{
+			nOption++;
+			if (nOption>sizeof(menu)/sizeof(*menu)-1) nOption=0;
+			showMainMenu(nOption);
+		}
+
+		switch (get_rot()) //Rotatory
+		{
+		case 0:
+			rot_q1=0;
+			rot_q2=rot_q2;
+			break;
+		case 1:
+			rot_q1=rot_q1;
+			rot_q2=0;
+			break;
+		case 2:
+			rot_q1=rot_q1;
+			rot_q2=1;
+			break;
+		case 3:
+			rot_q1=1;
+			rot_q2=rot_q2;
+			break;
+		default :
+			rot_q1=rot_q1;
+			rot_q2=rot_q2;
+		}
+		if (temp != rot_q1)
+		{
+			temp = rot_q1;
+			if (rot_q1==1 && rot_q2==1) //rotate counterclockwise
+			{
+				nOption--;
+				if (nOption<0) nOption = sizeof(menu)/sizeof(*menu)-1;
+				showMainMenu(nOption);
+			}
+			else if (rot_q1==1 && rot_q2==0) //rotate clockwise
+			{
+				nOption++;
+				if (nOption>sizeof(menu)/sizeof(*menu)-1) nOption=0;
+				showMainMenu(nOption);
+			}
+		}
+	}
+}
+
+void openText(void)
+{
+	unsigned char c = 0x4b;
+
+	LCDClear(0);
+
+	set_title("Texto Livre");
+
+	while(LOOP)
+	{
+		activeMainMenuBtn(); 
+
+		if(get_push() == BTN_CENTER)
+		{
+			delay(200);
+			printChar(c,0); //Print selected char
+			if(xPos+CHAR_LENGTH > LCD_WIDTH)
+				setXY(0, yPos+1);
+			else
+				setXY(xPos+CHAR_LENGTH, yPos);
+		}
+
+		switch (get_rot()) //Rotatory
+		{
+		case 0:
+			rot_q1=0;
+			rot_q2=rot_q2;
+			break;
+		case 1:
+			rot_q1=rot_q1;
+			rot_q2=0;
+			break;
+		case 2:
+			rot_q1=rot_q1;
+			rot_q2=1;
+			break;
+		case 3:
+			rot_q1=1;
+			rot_q2=rot_q2;
+			break;
+		default :
+			rot_q1=rot_q1;
+			rot_q2=rot_q2;
+		}
+		if ( temp != rot_q1 )
+		{
+			temp = rot_q1;
+			if (rot_q1==1 && rot_q2==1) //rotate counterclockwise
+			{
+				c--;
+				if (c < 0x20) c = 0x7a;
+				if (c > 0x7a) c = 0x20; 
+
+				printChar(c,0);
+				setXY(xPos, yPos);
+			}
+			else if (rot_q1==1 && rot_q2==0) //rotate clockwise
+			{
+				c++;
+				if (c < 0x20) c = 0x7a;
+				if (c > 0x7a) c = 0x20; 
+
+				printChar(c,0);
+				setXY(xPos, yPos);
+			}
+		}
+	}
+}
+
+void openRS232(void) 
+{
+	LCDClear(0);
+
+	set_title("RS232 in LCD");
+
+	while(LOOP)
+	{
+		activeMainMenuBtn(); 
+
+		buff=XUartLite_Recv (&UartLite, RecvBuffer, 1);
+		if (buff) printChar(RecvBuffer[0], 0);
+	}
+}
+
+void openConfig(void) 
+{
+	LCDClear(0);
+
+	int n = 0;
+
+	showConfig(0);
+
+	while(LOOP)
+	{
+		activeMainMenuBtn(); 
+
+		if(get_push() == BTN_LEFT) 		 //Change option
+		{ 
+			n--;
+			if (n < 0) n = 2;
+
+			showConfig(n);
+			delay(200);
+		} 
+
+		if(get_push() == BTN_RIGHT) 	//Change option
+		{ 
+			n++;
+			if (n > 2) n = 0;
+
+			showConfig(n);
+			delay(200);
+		} 
+
+		switch (get_rot()) //Rotatory
+		{
+		case 0:
+			rot_q1=0;
+			rot_q2=rot_q2;
+			break;
+		case 1:
+			rot_q1=rot_q1;
+			rot_q2=0;
+			break;
+		case 2:
+			rot_q1=rot_q1;
+			rot_q2=1;
+			break;
+		case 3:
+			rot_q1=1;
+			rot_q2=rot_q2;
+			break;
+		default :
+			rot_q1=rot_q1;
+			rot_q2=rot_q2;
+		}
+		if ( temp != rot_q1 )
+		{
+			temp = rot_q1;
+			if (rot_q1==1 && rot_q2==1) //rotate counterclockwise
+			{
+				if(n==0) swap_led();
+				if(n==1) set_vop(get_vop()-1);
+				if(n==2) set_bias(get_bias()-1);
+				showConfig(n);
+			}
+			else if (rot_q1==1 && rot_q2==0) //rotate clockwise
+			{
+				if(n==0) swap_led();
+				if(n==1) set_vop(get_vop()+1);
+				if(n==2) set_bias(get_bias()+1);
+				showConfig(n);
+			}
+		}
+	}
+}
+
+void openAbout(void) 
+{
+	LCDClear(0);
+
+	int n = -1;
+
+	set_title("Sobre o proj.");
+	printStr("Gire o rotac."); 	newLine();
+	printStr("para mudar de"); 	newLine();
+	printStr("pagina."); 		newLine();
+	newBoldLine();
+
+	while(LOOP)
+	{
+		activeMainMenuBtn(); 
+
+		switch (get_rot()) //Rotatory
+		{
+		case 0:
+			rot_q1=0;
+			rot_q2=rot_q2;
+			break;
+		case 1:
+			rot_q1=rot_q1;
+			rot_q2=0;
+			break;
+		case 2:
+			rot_q1=rot_q1;
+			rot_q2=1;
+			break;
+		case 3:
+			rot_q1=1;
+			rot_q2=rot_q2;
+			break;
+		default :
+			rot_q1=rot_q1;
+			rot_q2=rot_q2;
+		}
+		if ( temp != rot_q1 )
+		{
+			temp = rot_q1;
+			if (rot_q1==1 && rot_q2==1) //rotate counterclockwise
+			{
+				n--;
+				if (n < 0) n = 2;
+
+				showCredits(n);
+			}
+			else if (rot_q1==1 && rot_q2==0) //rotate clockwise
+			{
+				n++;
+				if (n > 2) n = 0; 
+
+				showCredits(n);
+			}
+		}
+	}
+}
+
+void showMainMenu(int n)
+{
+	LCDClear(0);
+
+	switch (n) {
+	case 0:
+		printBmp(text);
+		break;
+	case 1:
+		printBmp(pc);
+		break;
+	case 2:
+		printBmp(config);
+		break;
+	case 3:
+		printBmp(about);
+		break;
+	}
+
+	set_title("Menu");
+	newLine();
+
+	int i;
+	for(i = 0;i < sizeof(menu)/sizeof(*menu);i++){
+		if(i==n)
+			printStrBold(menu[i]);
+		else
+			printStr(menu[i]);
+		newLine();
+	}
+}
+
+void showCredits(n) 
+{
+	LCDClear(0);
+
+	if(n==0) 
+	{
+		show_eduardo();
+		setXY(60,0);
+		printStrBold("PAG1");
+	}
+
+	if(n==1) 
+	{
+		show_gibran();
+		setXY(60,0);
+		printStrBold("PAG2");
+	}
+
+	if(n==2) 
+	{
+		show_gustavo();
+		setXY(60,0);
+		printStrBold("PAG3");
+	}
+}
+
+void showConfig(int n)
+{
+	LCDClear(0);
+
+	printStr("Led"); newLine();
+	if (get_led()==LCD_LED_ON)
+		printStr("   LIGADO");
+	if (get_led()==LCD_LED_OFF)
+		printStr("   DESLIGADO");
+
+	newLine();
+	printStr("Contraste"); newLine();
+	printBar((int)(LCD_WIDTH*((float)get_vop()/128.0)));
+
+	newLine();
+	printStr("Brilho"); newLine();
+	printBar((int)(LCD_WIDTH*((float)get_bias()/8.0)));
+
+	if(n==0)
+	{
+		setXY(0,0);
+		printStrBold("Led");
+	}
+	if(n==1)
+	{
+		setXY(0,2);
+		printStrBold("Contraste");
+	}
+	if(n==2)
+	{
+		setXY(0,4);
+		printStrBold("Brilho");
+	}
+}
+
+void set_title(char *s) 
+{
+	boldLine();
+	setXY(LCD_WIDTH/2-(strlen(s)*3),0);
+	printStrBold(s);
+	newLine();
+}
+
+void activeMainMenuBtn(void)
+{
+	if(get_push() == BTN_UP) openMainMenu();
+}
+
+int get_rot(void)
+{
+	return XGpio_DiscreteRead(&ROT, 1);
+}
+
+int get_push(void)
+{
+	return XGpio_DiscreteRead(&PUSH, 1);
+}
+
+void show_eduardo(void)
+{
+	LCDClear(0);
+	printBmp(eduardo8bits);
+	setXY(42,4);
+	printStr("Eduardo");
+	setXY(30,5);
+	printStrBold("3116456-0");	
+}
+
+void show_gibran(void)
+{
+	LCDClear(0);
+	printBmp(gibran8bits);
+	setXY(48,4);
+	printStr("Gibran");
+	setXY(30,5);
+	printStrBold("3111338-9");	
+}
+
+void show_gustavo(void)
+{
+	LCDClear(0);
+	printBmp(gustavo8bits);
+	setXY(42,4);
+	printStr("Gustavo");
+	setXY(30,5);
+	printStrBold("3110369-3");
+}
+
+/*
+Main functions
+ *****************************************************
+ */
+void LoadSpartan3E(void)
+{
+	int Status;
+
+	/*Inicializacao do SPI*/
+	Status = initSpiPolled(&Spi, XPAR_SPI_0_DEVICE_ID);
+
+	/*Inicializacao do GPIO LED*/
+	XGpio_Initialize(&LED,XPAR_LED_DEVICE_ID);
+	XGpio_SetDataDirection(&LED, 1, 0x0);
+
+	/*Inicializacao do GPIO D_C*/
+	XGpio_Initialize(&D_C, XPAR_D_C_DEVICE_ID);
+	XGpio_SetDataDirection(&D_C, 1, 0x0);
+
+	/*Inicializacao do GPIO RST*/
+	XGpio_Initialize(&RST, XPAR_RST_DEVICE_ID);
+	XGpio_SetDataDirection(&RST, 1, 0x0);
+
+	/*Inicializacao do GPIO SCE*/
+	XGpio_Initialize(&SCE, XPAR_SCE_DEVICE_ID);
+	XGpio_SetDataDirection(&SCE, 1, 0x0);
+
+	/*Inicializacao do da RS232*/
+	XUartLite_Initialize (&UartLite, XPAR_RS232_DTE_DEVICE_ID);
+
+	/*Inicializacao do GPIO ROT*/
+	XGpio_Initialize(&ROT, XPAR_ROT_DEVICE_ID);
+	XGpio_SetDataDirection(&ROT, 1, 0xff);
+
+	/*Inicializacao do GPIO PUSH*/
+	XGpio_Initialize(&PUSH, XPAR_PUSH_DEVICE_ID);
+	XGpio_SetDataDirection(&PUSH, 1, 0xff);
+
+}
+
+void NK5110Init(void) //do not change this function!
+{
+	reset(30);
+
+	//signals ************
+	//********************
+	set_led(signalLED);					//LED on
+	set_mode(signalD_C);				//D_C data mode
+	set_reset(signalRST);				//RST off
+	set_chip(signalSCE);				//SCE off
+
+	//datasheet **********
+	//********************
+	set_functionSet(functionSet);		//0x20
+
+	//for H=0 ************
+	set_displayControl(displayControl);	//0x0c
+	setXY(xPos, yPos);					//(x=0,y=0)
+
+	//for H=1 ************
+	set_vlcd_coefficient(vlcd);			//0x04
+	set_bias(bias);						//0x13
+	set_vop(vop);						//0xbc
+
+	screenClear();
+
+	//********************
+}
+
+void NK5110Setup(	//do not change this function!
+		unsigned char s_LED,
+		unsigned char s_D_C,
+		unsigned char s_RST,
+		unsigned char s_SCE,
+
+		unsigned char d_functionSet,
+		unsigned char d_displayControl,
+		unsigned char d_xPos,
+		unsigned char d_yPos,
+		unsigned char d_vlcd,
+		unsigned char d_bias,
+		unsigned char d_vop	)
+{
+	reset(30);
+
+	//signals ************
+	//********************
+	set_led(s_LED);
+	set_mode(s_D_C);
+	set_reset(s_RST);
+	set_chip(s_SCE);
+
+	//datasheet **********
+	//********************
+	set_functionSet(d_functionSet);
+
+	//for H=0 ************
+	set_displayControl(d_displayControl);
+	setXY(d_xPos, d_yPos);
+
+	//for H=1 ************
+	set_vlcd_coefficient(d_vlcd);
+	set_bias(d_bias);
+	set_vop(d_vop);
+
+	//********************
+}
+
+void NK5110Startup(void) //default startup
+{
+	int i;
+
+	LCDClear(0);
+
+	printStr("Initializing");
+
+	turn_on_led();
+
+	for (i = 0; i < 6; i++) //Screen will blink some times
+	{
+		delay(500);
+		swap_led(); //set_led(i % 2);
+		printChar('.', 0);
+	}
+
+	turn_on_led();
+
+	LCDClear(2000); //Wait 2sec to next screen
+
+	printBmp(nokia8bits); //Print Nokia Logo
+
+	delay(4000);
+}
+
+void LCDClear(int t)
+{
+	delay(t);
+	screenClear();
+	setXY(0, 0);
+}
+
+void LCDWrite(unsigned char dt, unsigned char command)
+{
+	XGpio_DiscreteWrite(&SCE, 1, LCD_SCE_ON);	//chip_active();
+	XGpio_DiscreteWrite(&D_C, 1, command);		//set_mode(command);
+
+	Spi_Data(&Spi, dt);
+	if (command == LCD_DATA) data_LCD[xPos][yPos] = dt;
+
+	set_mode(signalD_C); //data_mode();
+	set_chip(signalSCE); //chip_desactive();
+}
+
+void screenClear(void)
+{
+	unsigned char t, k;
+	setXY(0, 0);
+
+	for (t = 0; t < LCD_HEIGHT/8; t++)
+		for (k = 0; k < LCD_WIDTH; k++)
+		{
+			LCDWrite(0x00, LCD_DATA); data_LCD[k][t] = 0x00;
+		}
+}
+
+void printStr(char *s)
+{
+	while (*s) printChar(*s++, 0);
+}
+void printStrBold(char *s)
+{
+	while (*s) printChar(*s++, 1);
+}
+void printBmp(char *b)
+{
+	int i;
+	for (i = 0; i < (LCD_WIDTH * LCD_HEIGHT / 8); i++)
+		LCDWrite(b[i], LCD_DATA);
+}
+void printChar(unsigned char c, unsigned char bold)
+{
+	unsigned char f;
+
+	if (bold)
+		LCDWrite(0xff, LCD_DATA); //Blank vertical line padding (Bold mode)
+	else
+		LCDWrite(0x00, LCD_DATA); //Blank vertical line padding
+
+	int line;
+	for (line = 0; line < 5; line++)
+	{
+		f = font5x8[(c - 0x20) * 5 + line];
+		if (bold) f = 0xff & ~f;
+		LCDWrite(f, LCD_DATA);
+	}
+}
+void printBar(int n)
+{
+	int i=0;
+	if (n<0) n=0;
+	if (n>LCD_WIDTH) n=LCD_WIDTH;
+
+	for (i=0;i<n;i++)
+		LCDWrite(0xff, LCD_DATA);
+}
+
+void backspace(void)
+{
+	setXY(xPos,yPos);
+	printChar(' ', 0);
+	setXY(xPos,yPos);
+}
+
+void newLine(void)
+{
+	setXY(0, ++yPos);
+}
+void newBoldLine(void)
+{
+	unsigned char i;
+	setXY(0, ++yPos);
+	for (i = 0; i < LCD_WIDTH; i++)
+		LCDWrite(0xff, LCD_DATA);
+	setXY(0, yPos);
+}
+void boldLine(void)
+{
+	unsigned char i;
+	setXY(0, yPos);
+	for (i = 0; i < LCD_WIDTH; i++)
+		LCDWrite(0xff, LCD_DATA);
+	setXY(0, yPos);
+}
+
+void drawEdge(void)
+{
+	unsigned char  j;
+	for (j = 0; j < 84; j++) // top
+	{
+		setXY(j, 0);
+		LCDWrite(1, 0x01);
+	}
+	for (j = 0; j < 84; j++) //Bottom
+	{
+		setXY(j, 5);
+		LCDWrite(1, 0x80);
+	}
+
+	for (j = 0; j < 6; j++) // Right
+	{
+		setXY(83, j);
+		LCDWrite(1, 0xff);
+	}
+	for (j = 0; j < 6; j++) // Left
+	{
+		setXY(0, j);
+		LCDWrite(1, 0xff);
+	}
+
+}
+
+/*
+Datasheet LCD functions
+ *****************************************************
+ */
+void set_functionSet(unsigned char c)
+{
+	functionSet = c;
+	LCDWrite(c, LCD_COMMAND);
+}
+unsigned char get_functionSet(void)
+{
+	return functionSet;
+}
+
+//for H=0
+
+void display_blank(void)
+{
+	int h = ((functionSet - P0_V0_H0) & 6);
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=0
+	displayControl =							DISPLAY_BLANK;
+	LCDWrite(displayControl, LCD_COMMAND);		//Display Blank
+	set_functionSet(functionSet);				//Return to default function
+}
+void display_normal(void)
+{
+	int h = ((functionSet - P0_V0_H0) & 6);
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=0
+	displayControl =							DISPLAY_NORMAL;
+	LCDWrite(displayControl, LCD_COMMAND);		//Display Normal
+	set_functionSet(functionSet);				//Return to default function
+}
+void display_filled(void)
+{
+	int h = ((functionSet - P0_V0_H0) & 6);
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=0
+	displayControl =							DISPLAY_FILLED;
+	LCDWrite(displayControl, LCD_COMMAND);		//Display Filled
+	set_functionSet(functionSet);				//Return to default function
+}
+void display_inverse(void)
+{
+	int h = ((functionSet - P0_V0_H0) & 6);
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=0
+	displayControl =							DISPLAY_INVERSE;
+	LCDWrite(displayControl, LCD_COMMAND);		//Display Inverse
+	set_functionSet(functionSet);				//Return to default function
+}
+void set_displayControl(unsigned char c)
+{
+	int h = ((functionSet - P0_V0_H0) & 6);
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=0
+
+	if (c == DISPLAY_BLANK || c == DISPLAY_NORMAL || c == DISPLAY_FILLED || c == DISPLAY_INVERSE)
+		displayControl = c;
+	else
+		displayControl = DISPLAY_NORMAL;
+
+	LCDWrite(displayControl, LCD_COMMAND);		//Set displayControl
+
+	set_functionSet(functionSet);				//Return to default function
+}
+unsigned char get_displayControl(void)
+{
+	return displayControl;
+}
+
+void setXY(unsigned char X, unsigned char Y)
+{
+	LCDWrite((functionSet - P0_V0_H0) & 6, LCD_COMMAND);		//H=0
+
+	if (X >= LCD_WIDTH) X =	 LCD_WIDTH - 0x01;		else if (X < 0x00) X = 0;
+	if (Y >= LCD_HEIGHT) Y = LCD_HEIGHT/8 - 0x01;	else if (Y < 0x00) Y = 0;
+
+	xPos = X;
+	yPos = Y;
+
+	LCDWrite(Y_ADDRESS | yPos, LCD_COMMAND);	//column
+	LCDWrite(X_ADDRESS | xPos, LCD_COMMAND);	//row
+
+	set_functionSet(functionSet);				//Return to default function
+}
+unsigned char getX(void)
+{
+	return xPos;
+}
+unsigned char getY(void)
+{
+	return yPos;
+}
+
+//for H=1
+
+void vlcd_coefficient0(void)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+	vlcd = VLCD_0;
+	LCDWrite(vlcd, LCD_COMMAND);				//Set vlcd temperature coefficient 0
+	set_functionSet(functionSet);				//Return to default function
+}
+void vlcd_coefficient1(void)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+	vlcd = VLCD_1;
+	LCDWrite(vlcd, LCD_COMMAND);				//Set vlcd temperature coefficient 1
+	set_functionSet(functionSet);				//Return to default function
+}
+void vlcd_coefficient2(void)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+	vlcd = VLCD_2;
+	LCDWrite(vlcd, LCD_COMMAND);				//Set vlcd temperature coefficient 2
+	set_functionSet(functionSet);				//Return to default function
+}
+void vlcd_coefficient3(void)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+	vlcd = VLCD_3;
+	LCDWrite(vlcd, LCD_COMMAND);				//Set vlcd temperature coefficient 3
+	set_functionSet(functionSet);				//Return to default function
+}
+void set_vlcd_coefficient(unsigned char c)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+
+	if (c == VLCD_0 || c == VLCD_1 || c == VLCD_2 || c == VLCD_3)
+		vlcd = c;
+	else
+		vlcd = VLCD_0;
+
+	LCDWrite(vlcd, LCD_COMMAND);				//Set vlcd
+
+	set_functionSet(functionSet);				//Return to default function
+}
+unsigned char get_vlcd_coefficient(void)
+{
+	return vlcd;
+}
+
+void set_bias(unsigned char c)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+
+	if (c >= BIAS_WIDTH) c = BIAS_WIDTH - 0x01;	else if (c < 0x00) c = 0;
+
+	bias = c;
+	LCDWrite(BIAS_ADDRESS | bias, LCD_COMMAND);	//Set bias
+
+	set_functionSet(functionSet);				//Return to default function
+}
+unsigned char get_bias(void)
+{
+	return bias;
+}
+
+void set_vop(unsigned char c)
+{
+	int h = (functionSet - P0_V0_H0) | 1;
+	LCDWrite(h | P0_V0_H0, LCD_COMMAND);		//H=1
+
+	if (c >= VOP_WIDTH) c = VOP_WIDTH - 0x01;	else if (c < 0x00) c = 0;
+
+	vop = c;
+	LCDWrite(VOP_ADDRESS | vop, LCD_COMMAND);	//Set vop
+
+	set_functionSet(functionSet);				//Return to default function
+}
+unsigned char get_vop(void)
+{
+	return vop;
+}
+
+/*
+Signal functions
+ *****************************************************
+ */
+void turn_on_led(void)				{ signalLED = LCD_LED_ON;		XGpio_DiscreteWrite(&LED, 1, signalLED); }
+void turn_off_led(void)				{ signalLED = LCD_LED_OFF;		XGpio_DiscreteWrite(&LED, 1, signalLED); }
+void set_led(unsigned char c)		{ signalLED = c;				XGpio_DiscreteWrite(&LED, 1, c); }
+unsigned char get_led(void)			{ return signalLED; }
+void swap_led(void)					{			if (signalLED == LCD_LED_ON)	turn_off_led();
+else	if (signalLED == LCD_LED_OFF)	turn_on_led();
+}
+
+void data_mode(void)				{ signalD_C = LCD_DATA;			XGpio_DiscreteWrite(&D_C, 1, signalD_C); }
+void command_mode(void)				{ signalD_C = LCD_COMMAND;		XGpio_DiscreteWrite(&D_C, 1, signalD_C); }
+void set_mode(unsigned char c)		{ signalD_C = c;				XGpio_DiscreteWrite(&D_C, 1, c); }
+unsigned char get_mode(void)		{ return signalD_C; }
+void swap_mode(void)				{			if (signalD_C == LCD_DATA)		command_mode();
+else	if (signalD_C == LCD_COMMAND)	data_mode();
+}
+
+void reset_active(void)				{ signalRST = LCD_RST_ON;		XGpio_DiscreteWrite(&RST, 1, signalRST); }
+void reset_desactive(void)			{ signalRST = LCD_RST_OFF;		XGpio_DiscreteWrite(&RST, 1, signalRST); }
+void set_reset(unsigned char c)		{ signalRST = c;				XGpio_DiscreteWrite(&RST, 1, c); }
+unsigned char get_reset(void)		{ return signalRST; }
+void reset(int t)					{ reset_active(); delay(t); reset_desactive(); delay(t); }
+void swap_reset(void)				{			if (signalRST == LCD_RST_ON)	reset_desactive();
+else	if (signalRST == LCD_RST_OFF)	reset_active();
+}
+
+void chip_active(void)				{ signalSCE = LCD_SCE_ON;		XGpio_DiscreteWrite(&SCE, 1, signalSCE); }
+void chip_desactive(void)			{ signalSCE = LCD_SCE_OFF;		XGpio_DiscreteWrite(&SCE, 1, signalSCE); }
+void set_chip(unsigned char c)		{ signalSCE = c;				XGpio_DiscreteWrite(&SCE, 1, c); }
+unsigned char get_chip(void)		{ return signalSCE; }
+void swap_chip(void)				{			if (signalSCE == LCD_SCE_ON)	chip_desactive();
+else	if (signalSCE == LCD_SCE_OFF)	chip_active();
+}
+
+/*
+Other functions
+ *****************************************************
+ */
+int Spi_Data(XSpi *SpiPtr, int data)
+{
+	int Status;
+
+	WriteBuffer[0]=data;
+
+	Status = XSpi_Transfer(SpiPtr, WriteBuffer, NULL,1);
+	if (Status != XST_SUCCESS)
+	{
+		xil_printf("writeAmp XSpi_Transfer: XST_FAILURE: Code: %d\n\r", Status);
+		return XST_FAILURE;
+	}
+
+	return XST_SUCCESS;
+}
+
+void delay (int t)
+{
+	int i;
+	for (i = 0; i < t*CLOCK; i++);
+}
+/*
+ *****************************************************
+ */
